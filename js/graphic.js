@@ -1,8 +1,7 @@
 var pymChild = null,
     mobileThreshold = 300, //set to 500 for testing
     aspect_width = 4,
-    aspect_height = 10
-    ;
+    aspect_height = 10;
 
 var $map = $('#map');
 
@@ -36,7 +35,7 @@ function draw_graphic(){
 
 function render(width) {
 
-    var height = .9 * width;
+    var height = .88 * width;
 
     console.log(width);
 
@@ -62,8 +61,8 @@ function render(width) {
         }
 
     queue()
-        .defer(d3.json, "caCountiesTopoSimple.json")
-        .defer(d3.csv, "defense-csv.csv")
+        .defer(d3.json, "counties.json")
+        .defer(d3.csv, "defense.csv")
         .await(ready);
 
     var rateByCounty = {};
