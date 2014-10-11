@@ -63,14 +63,25 @@ function render(width) {
     queue()
         .defer(d3.json, "counties.json")
         .defer(d3.csv, "defense.csv")
+        .defer(d3.csv, "2013_county.csv")
         .await(ready);
 
     var rateByCounty = {};
+    var crimeByCounty = {};
 
-    function ready(error, ca, defense){
+    function ready(error, ca, defense, crime){
         //create a js object which maps county names to values
+        
         defense.forEach(function(d) { 
-            rateByCounty[d.county] = +d.value;})
+            rateByCounty[d.county] = +d.value;});
+        //create a js object mapping county names to values
+        
+         crime.forEach(function(d) {
+            crimeByCounty[d.county] = +d.violent_crimes;});
+
+        console.log(crimeByCounty);
+
+        mapData = topojson.feature(ca, ca.objects.subunits);
 
         var max = d3.max(defense, function(d) { return +d.value; });
 
@@ -84,36 +95,29 @@ function render(width) {
                 return '$' + (d/1000000) + " m";
             };
 
-        svg.append("path")
-            .datum(topojson.feature(ca, ca.objects.subunits))
-            .attr("class", "land")
-            .attr("d", path);
+        //join lesso data to mapData by county name for bubbles
+        var areas = mapData.features.map(
+            function(d) {return crimeByCounty[d.properties.fullName];})
+
+        console.log(areas); 
+
+        //scale for circle
+        var scale = d3.scale.sqrt()
+            .domain(d3.extent(areas))
+            .range([3, 110]);
 
         //bind feature data to the map
         svg.selectAll(".subunit")
-              .data(topojson.feature(ca, ca.objects.subunits).features)
+              .data(mapData.features)
             .enter().append("path")
             .attr("class", function(d) { return "subunit " + d.properties.name; })
-            .attr("d", path)
+            .attr("d", path);
               //get color from csv call
-              .style("fill", function(d){ 
-                var string = d.properties.name;
-                upper = string.toUpperCase();
-                return color(rateByCounty[upper]);
-              })
-            .on("mouseover", function(d){ //tooltip
-                div.transition()
-                    .duration(200)
-                    .style("opacity", .9);
-                div.html(d.properties.fullName + "<p>" + "Total Value: " + format(rateByCounty[d.properties.name.toUpperCase()]))//warning this is an approximation
-                    .style("left", (d3.event.pageX) + 10 + "px")
-                    .style("top", (d3.event.pageY - 30) + "px"); 
-            })
-            .on("mouseout", function(d) { 
-                div.transition()
-                    .duration(500)
-                    .style("opacity", 0.0);
-            });
+              // .style("fill", function(d){ 
+              //   var string = d.properties.name;
+              //   upper = string.toUpperCase();
+              //   return color(rateByCounty[upper]);
+              // });
 
         //exterior border
         svg.append("path")
@@ -126,12 +130,43 @@ function render(width) {
             .attr("class", "tooltip")
             .style("opacity", 0);
 
+      //console.log(topojson.feature(ca, ca.objects.subunits).features[9].properties.areaLand);
+        //circles
+        svg.append("g")
+              .attr("class", "circles")
+            .selectAll("circle")
+                  .data(topojson.feature(ca, ca.objects.subunits).features)
+                .enter().append("circle")
+                    .attr("transform", function(d) { return 'translate(' + path.centroid(d) + ')';})
+                  .attr("r", function(d) { return scale(crimeByCounty[d.properties.fullName]); })
+            .style("fill", function(d){ 
+                var string = d.properties.name;
+                upper = string.toUpperCase();
+                return color(rateByCounty[upper]);
+              })
+                .on("mouseover", function(d){ //tooltip
+                    div.transition()
+                        .duration(200)
+                        .style("opacity", .9);
+                    div.html(d.properties.fullName + "<p>Value of Military Gear: " + format(rateByCounty[d.properties.name.toUpperCase()]) + "</p><p>Violent Crimes Per Year: " + crimeByCounty[d.properties.fullName] + "</p>"
+
+                    )//warning this is an approximation
+                        .style("left", (d3.event.pageX) + 10 + "px")
+                        .style("top", (d3.event.pageY - 30) + "px"); 
+                })
+                .on("mouseout", function(d) { 
+                    div.transition()
+                        .duration(500)
+                        .style("opacity", 0.0);
+                });        
+
     //key position encoding for legend
     var y = d3.scale.linear()
         .domain([0, max]) //input data
         .range([0, width/4]); //height of the key
 
 
+    //create group for color bar and append data
     var colorBar = svg.append("g")
         .attr("class", "key")
         .attr("transform", "translate(" + (.4 * width) + "," + margin.top * 2 + ")") //position w/in svg
@@ -143,7 +178,7 @@ function render(width) {
             return d;
         }));
 
-    //create color segments
+    //create color rects
     colorBar.enter()
         .append("rect")
             .attr("width", 10)
@@ -164,6 +199,7 @@ function render(width) {
 
     //console.log(format(max));
 
+    //add label
     d3.select(".key")
         .call(yAxis)
         .append("text")
