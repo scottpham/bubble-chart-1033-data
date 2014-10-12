@@ -68,20 +68,20 @@ function render(width) {
 
     var rateByCounty = {};
     var crimeByCounty = {};
+    var populationByCounty = {};
 
     function ready(error, ca, defense, crime){
         //create a js object which maps county names to values
-        
         defense.forEach(function(d) { 
-            rateByCounty[d.county] = +d.value;});
-        //create a js object mapping county names to values
-        
-         crime.forEach(function(d) {
-            crimeByCounty[d.county] = +d.violent_crimes;});
+            rateByCounty[d.county] = +d.value; });
 
-        console.log(crimeByCounty);
+        //create a js object mapping county names to values
+        crime.forEach(function(d) {
+            crimeByCounty[d.county] = +d.violent_crimes;
+            populationByCounty[d.county] = +d.population; });
 
         mapData = topojson.feature(ca, ca.objects.subunits);
+
 
         var max = d3.max(defense, function(d) { return +d.value; });
 
@@ -197,23 +197,80 @@ function render(width) {
         .tickValues([colorDomain[0], colorDomain[2], colorDomain[4]])
         .tickFormat(truncate);
 
-    //console.log(format(max));
-
     //add label
     d3.select(".key")
         .call(yAxis)
         .append("text")
         .attr("y", -5)
-        .text("Cash Value of Gear")
-        ;
+        .text("Cash Value of Gear");
+
+
+    //buttons
+    //population circles
+    d3.select('#population').on("click", function(){ 
+        
+        var popAreas = mapData.features.map(
+            function(d) {return populationByCounty[d.properties.fullName];});   
+
+        popScale = d3.scale.sqrt()
+            .domain(d3.extent(popAreas))
+            .range([3,110]);   
+
+        d3.selectAll("circle")
+            .transition()
+            .attr("r", function(d) { return popScale(populationByCounty[d.properties.fullName]); });
+
+        d3.selectAll("circle")
+            .on("mouseover", function(d) { //tooltip
+                div.transition()
+                    .style("opacity", .9);
+                div.html(d.properties.fullName + "<p>Value of Military Gear: " + format(rateByCounty[d.properties.name.toUpperCase()]) + "</p><p>Population: " + populationByCounty[d.properties.fullName] + "</p>")//warning this is an approximation
+                    .style("left", (d3.event.pageX) + 10 + "px")
+                    .style("top", (d3.event.pageY - 30) + "px"); 
+                })
+                .on("mouseout", function(d) { 
+                    div.transition()
+                        .duration(500)
+                        .style("opacity", 0.0);});      
+    });//end of button
+
+    //crime circles
+    d3.select('#crime').on("click", function(){ 
+    
+
+        d3.selectAll("circle")
+            .transition()
+            .attr("transform", function(d) { return 'translate(' + path.centroid(d) + ')';})
+                  .attr("r", function(d) { return scale(crimeByCounty[d.properties.fullName]); });
+                
+        d3.selectAll("circle")
+            .on("mouseover", function(d){ //tooltip
+                div.transition()
+                    .duration(200)
+                    .style("opacity", .9);
+                div.html(d.properties.fullName + "<p>Value of Military Gear: " + format(rateByCounty[d.properties.name.toUpperCase()]) + "</p><p>Yearly Violent Crimes: " + crimeByCounty[d.properties.fullName] + "</p>")//warning this is an approximation
+                    .style("left", (d3.event.pageX) + 10 + "px")
+                    .style("top", (d3.event.pageY - 30) + "px"); })
+            .on("mouseout", function(d) { 
+                div.transition()
+                    .duration(500)
+                    .style("opacity", 0.0);}); 
+        }); //end of button     
+
+
 
     //end of ready function
     }
+
+
+
 
     //send height to parent AFTER chart is built
     if (pymChild) {
         pymChild.sendHeightToParent();
     }
+
+
 
 //end function render    
 }
