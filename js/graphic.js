@@ -12,6 +12,8 @@ var margin = {
     left: 20
 };
 
+var circleRange = [3,40];
+
 var colors = {
     'red1': '#6C2315', 'red2': '#A23520', 'red3': '#D8472B', 'red4': '#E27560', 'red5': '#ECA395', 'red6': '#F5D1CA',
     'orange1': '#714616', 'orange2': '#AA6A21', 'orange3': '#E38D2C', 'orange4': '#EAAA61', 'orange5': '#F1C696', 'orange6': '#F8E2CA',
@@ -36,8 +38,6 @@ function draw_graphic(){
 function render(width) {
 
     var height = .88 * width;
-
-    console.log(width);
 
     var  projection = d3.geo.mercator()
         .scale(width*4)
@@ -66,9 +66,11 @@ function render(width) {
         .defer(d3.csv, "2013_county.csv")
         .await(ready);
 
+    //empty objects to later be mapped with data from csvs
     var rateByCounty = {};
     var crimeByCounty = {};
     var populationByCounty = {};
+    var crimePerPop = {};
 
     function ready(error, ca, defense, crime){
         //create a js object which maps county names to values
@@ -78,7 +80,8 @@ function render(width) {
         //create a js object mapping county names to values
         crime.forEach(function(d) {
             crimeByCounty[d.county] = +d.violent_crimes;
-            populationByCounty[d.county] = +d.population; });
+            populationByCounty[d.county] = +d.population;
+            crimePerPop[d.county] = (+d.violent_crimes / +d.population) * 10000; });
 
         mapData = topojson.feature(ca, ca.objects.subunits);
 
@@ -99,12 +102,10 @@ function render(width) {
         var areas = mapData.features.map(
             function(d) {return crimeByCounty[d.properties.fullName];})
 
-        console.log(areas); 
-
         //scale for circle
         var scale = d3.scale.sqrt()
             .domain(d3.extent(areas))
-            .range([3, 110]);
+            .range(circleRange);
 
         //bind feature data to the map
         svg.selectAll(".subunit")
@@ -112,12 +113,6 @@ function render(width) {
             .enter().append("path")
             .attr("class", function(d) { return "subunit " + d.properties.name; })
             .attr("d", path);
-              //get color from csv call
-              // .style("fill", function(d){ 
-              //   var string = d.properties.name;
-              //   upper = string.toUpperCase();
-              //   return color(rateByCounty[upper]);
-              // });
 
         //exterior border
         svg.append("path")
@@ -130,7 +125,6 @@ function render(width) {
             .attr("class", "tooltip")
             .style("opacity", 0);
 
-      //console.log(topojson.feature(ca, ca.objects.subunits).features[9].properties.areaLand);
         //circles
         svg.append("g")
               .attr("class", "circles")
@@ -204,6 +198,9 @@ function render(width) {
         .attr("y", -5)
         .text("Cash Value of Gear");
 
+    //set transition delay function
+
+    var delay = function(d, i){ return i * 10;};
 
     //buttons
     //population circles
@@ -214,11 +211,11 @@ function render(width) {
 
         popScale = d3.scale.sqrt()
             .domain(d3.extent(popAreas))
-            .range([3,110]);   
+            .range(circleRange);
 
-        d3.selectAll("circle")
-            .transition()
-            .attr("r", function(d) { return popScale(populationByCounty[d.properties.fullName]); });
+        d3.selectAll("circle").transition()
+            .attr("r", function(d) { return popScale(populationByCounty[d.properties.fullName]); })
+            .delay(delay);
 
         d3.selectAll("circle")
             .on("mouseover", function(d) { //tooltip
@@ -234,14 +231,13 @@ function render(width) {
                         .style("opacity", 0.0);});      
     });//end of button
 
-    //crime circles
+    //crime button
     d3.select('#crime').on("click", function(){ 
-    
 
         d3.selectAll("circle")
             .transition()
-            .attr("transform", function(d) { return 'translate(' + path.centroid(d) + ')';})
-                  .attr("r", function(d) { return scale(crimeByCounty[d.properties.fullName]); });
+                  .attr("r", function(d) { return scale(crimeByCounty[d.properties.fullName]); })
+                  .delay(delay);
                 
         d3.selectAll("circle")
             .on("mouseover", function(d){ //tooltip
@@ -257,6 +253,35 @@ function render(width) {
                     .style("opacity", 0.0);}); 
         }); //end of button     
 
+    //crime per ratio button
+    d3.select('#crimeRatio').on("click", function(){ 
+
+        var crimeAreas = mapData.features.map(
+            function(d) {return crimePerPop[d.properties.fullName];});   
+
+        crimeScale = d3.scale.sqrt()
+            .domain(d3.extent(crimeAreas))
+            .range(circleRange);  
+
+        d3.selectAll("circle")
+            .transition()
+            .attr("transform", function(d) { return 'translate(' + path.centroid(d) + ')';})
+                  .attr("r", function(d) { return crimeScale(crimePerPop[d.properties.fullName]); })
+                  .delay(delay);
+                
+        d3.selectAll("circle")
+            .on("mouseover", function(d){ //tooltip
+                div.transition()
+                    .duration(200)
+                    .style("opacity", .9);
+                div.html(d.properties.fullName + "<p>Value of Military Gear: " + format(rateByCounty[d.properties.name.toUpperCase()]) + "</p><p>Yearly Violent Crimes: " + crimeByCounty[d.properties.fullName] + "</p>")//warning this is an approximation
+                    .style("left", (d3.event.pageX) + 10 + "px")
+                    .style("top", (d3.event.pageY - 30) + "px"); })
+            .on("mouseout", function(d) { 
+                div.transition()
+                    .duration(500)
+                    .style("opacity", 0.0);}); 
+        }); //end of button  
 
 
     //end of ready function
